@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 from typing import Tuple, List, Dict
 
-
 class ColorPicker:
     def __init__(self):
         self.root = tk.Tk()
@@ -43,7 +42,8 @@ class ColorPicker:
         self.states: List[str] = ["white", "orange", "border", "green", "red"]
         self.stateIndex: int = 0
         self.click_counts: Dict[str, int] = {state: 0 for state in self.states}
-        self.fluctuation = 20
+        self.variances: Dict[str, int] = {state: 20 for state in self.states}
+
         self.canvas.bind("<Button-1>", self.get_rgb_from_image)
 
         self.rgb_values: Dict[str, List[Tuple[int, int, int]]] = {state: [] for state in self.states}
@@ -56,7 +56,6 @@ class ColorPicker:
 
         self.threshold_frame = tk.Label(self.root)
         self.threshold_frame.pack(side=tk.LEFT, padx=10, pady=10)
-
 
         self.slider = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, label="Fluctuation %")
         self.slider.set(20)
@@ -98,14 +97,16 @@ class ColorPicker:
         self.canvas.create_image(0, 0, anchor='nw', image=self.photo)
 
     def next_category(self):
-        if self.click_counts[self.states[self.stateIndex]] < 5:
-            print(f"Please click on 5 points for {self.states[self.stateIndex]}")
-            return
+        current_state = self.states[self.stateIndex]
+        self.variances[current_state] = self.slider.get()
 
         self.stateIndex += 1
         if self.stateIndex == len(self.states):
             self.stateIndex = 0
+
         self.update_instruction()
+        next_state = self.states[self.stateIndex]
+        self.slider.set(self.variances[next_state])
         print(f"State index: {self.stateIndex}")
 
     def get_rgb_from_image(self, event):
@@ -167,7 +168,7 @@ class ColorPicker:
         for color, rgb_list in self.rgb_values.items():
             if len(rgb_list) == 5:
                 average_rgb = self.get_average_rgb(rgb_list)
-                bounds[color] = self.get_bounds_bgr(average_rgb, self.slider.get())
+                bounds[color] = self.get_bounds_bgr(average_rgb, self.variances[color])
         return bounds
 
     def save_bounds_to_file(self):
@@ -182,10 +183,9 @@ class ColorPicker:
         try:
             with open(file_path, 'w') as file:
                 for color, bounds_array in bounds.items():
-                    lower, upper = bounds_array[:3], bounds_array[3:]
-                    r, g, b = (lower[2] + upper[2]) // 2, (lower[1] + upper[1]) // 2, (lower[0] + upper[0]) // 2
-                    percentage = self.slider.get()
-                    file.write(f"{color};{r},{g},{b},{percentage}%\n")
+                    r, g, b = bounds_array[2], bounds_array[1], bounds_array[0]
+                    percentage = bounds_array[3]
+                    file.write(f"{color};{r},{g},{b},{percentage}\n")
             print(f'Bounds saved to {file_path}')
         except IOError as e:
             print(f'Error writing to file: {e}')
@@ -193,10 +193,8 @@ class ColorPicker:
     def apply_threshold(self, image: np.ndarray, bounds_dict_entry: np.ndarray) -> np.ndarray:
         bounds = bounds_dict_entry[:3]
         variance = bounds_dict_entry[3]
-        print(f"Bounds: {bounds}, variance: {variance}")
         lower = np.clip(bounds - variance, 0, 255)
         upper = np.clip(bounds + variance, 0, 255)
-        print(lower, upper)
 
         mask = cv2.inRange(image, lower, upper)
 
@@ -226,8 +224,6 @@ class ColorPicker:
 
             if 0 < len(self.rgb_values[self.states[self.stateIndex]]) < 6:
                 average_rgb = self.get_average_rgb(self.rgb_values[self.states[self.stateIndex]])
-                print(f"testitest{average_rgb}")
-                print(f"Slider value: {self.slider.get()}")
                 bounds_with_variance = self.get_bounds_bgr(average_rgb, self.slider.get())
                 thresh = self.apply_threshold(frame_rgb, bounds_with_variance)
             else:
