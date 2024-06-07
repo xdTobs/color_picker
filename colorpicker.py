@@ -166,12 +166,12 @@ class ColorPicker:
     def bounds_dict(self) -> Dict[str, np.ndarray]:
         bounds = {}
         for color, rgb_list in self.rgb_values.items():
-            if len(rgb_list) == 5:
-                average_rgb = self.get_average_rgb(rgb_list)
-                bounds[color] = self.get_bounds_bgr(average_rgb, self.variances[color])
+            average_rgb = self.get_average_rgb(rgb_list)
+            bounds[color] = self.get_bounds_bgr(average_rgb, self.variances[color])
         return bounds
 
     def save_bounds_to_file(self):
+        
         bounds = self.bounds_dict()
 
         overall_dir = os.path.dirname(os.path.dirname(__file__))
@@ -207,7 +207,7 @@ class ColorPicker:
         if not self.running:
             self.video_frame.pack()
             self.threshold_frame.pack()
-            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
             self.running = True
