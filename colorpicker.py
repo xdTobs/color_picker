@@ -57,7 +57,7 @@ class ColorPicker:
         self.threshold_frame = tk.Label(self.root)
         self.threshold_frame.pack(side=tk.LEFT, padx=10, pady=10)
 
-        self.slider = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, label="Fluctuation %")
+        self.slider = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, label="Fluctuation")
         self.slider.set(20)
         self.slider.pack()
 
@@ -158,17 +158,34 @@ class ColorPicker:
         b_avg = sum([rgb[2] for rgb in rgb_array]) // len(rgb_array)
         return (r_avg, g_avg, b_avg)
 
-    def get_bounds_bgr(self, rgb_value: Tuple[int, int, int], percentage: int) -> np.ndarray:
-        r, g, b = rgb_value
-        bounds_with_variance = np.array([b, g, r, percentage])
-        return bounds_with_variance
+    def rgb_to_hsv(self, rgb_value: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        bgr_value = np.uint8([[list(rgb_value)]])
+        hsv_value = cv2.cvtColor(bgr_value, cv2.COLOR_BGR2HSV)[0][0]
+        return tuple(hsv_value)
+
+    def get_bounds_hsv(self, hsv_value: Tuple[int, int, int], percentage: int) -> np.ndarray:
+        h, s, v = hsv_value
+        fluctuation = percentage / 100.0
+        h_min, h_max = h * (1 - fluctuation), h * (1 + fluctuation)
+        s_min, s_max = s * (1 - fluctuation), s * (1 + fluctuation)
+        v_min, v_max = v * (1 - fluctuation), v * (1 + fluctuation)
+
+        h_min, h_max = max(0, min(179, h_min)), max(0, min(179, h_max))
+        s_min, s_max = max(0, min(255, s_min)), max(0, min(255, s_max))
+        v_min, v_max = max(0, min(255, v_min)), max(0, min(255, v_max))
+
+        lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
+        upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
+
+        return np.vstack((lower, upper))
 
     def bounds_dict(self) -> Dict[str, np.ndarray]:
         bounds = {}
         for color, rgb_list in self.rgb_values.items():
             if len(rgb_list) == 5:
                 average_rgb = self.get_average_rgb(rgb_list)
-                bounds[color] = self.get_bounds_bgr(average_rgb, self.variances[color])
+                average_hsv = self.rgb_to_hsv(average_rgb)
+                bounds[color] = self.get_bounds_hsv(average_hsv, self.variances[color])
         return bounds
 
     def save_bounds_to_file(self):
@@ -183,20 +200,26 @@ class ColorPicker:
         try:
             with open(file_path, 'w') as file:
                 for color, bounds_array in bounds.items():
-                    r, g, b = bounds_array[2], bounds_array[1], bounds_array[0]
-                    percentage = bounds_array[3]
-                    file.write(f"{color};{r},{g},{b},{percentage}\n")
+                    lower, upper = bounds_array
+                    h_lower, s_lower, v_lower = lower
+                    h_upper, s_upper, v_upper = upper
+                    percentage = self.variances[color]
+                    h, s, v = (h_lower + h_upper) // 2, (s_lower + s_upper) // 2, (v_lower + v_upper) // 2
+                    file.write(f"{color};{int(h)},{int(s)},{int(v)},{percentage}\n")
             print(f'Bounds saved to {file_path}')
         except IOError as e:
             print(f'Error writing to file: {e}')
 
     def apply_threshold(self, image: np.ndarray, bounds_dict_entry: np.ndarray) -> np.ndarray:
-        bounds = bounds_dict_entry[:3]
-        variance = bounds_dict_entry[3]
-        lower = np.clip(bounds - variance, 0, 255)
-        upper = np.clip(bounds + variance, 0, 255)
+        lower, upper = bounds_dict_entry
+        print(f"Lower HSV bounds: {lower}, Upper HSV bounds: {upper}")
 
-        mask = cv2.inRange(image, lower, upper)
+
+        image_hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        print(f"HSV Image: {image_hsv}")
+
+
+        mask = cv2.inRange(image_hsv, lower, upper)
 
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         mask = cv2.dilate(mask, kernel, iterations=2)
@@ -224,8 +247,9 @@ class ColorPicker:
 
             if 0 < len(self.rgb_values[self.states[self.stateIndex]]) < 6:
                 average_rgb = self.get_average_rgb(self.rgb_values[self.states[self.stateIndex]])
-                bounds_with_variance = self.get_bounds_bgr(average_rgb, self.slider.get())
-                thresh = self.apply_threshold(frame_rgb, bounds_with_variance)
+                average_hsv = self.rgb_to_hsv(average_rgb)
+                bounds_with_variance = self.get_bounds_hsv(average_hsv, self.slider.get())
+                thresh = self.apply_threshold(frame, bounds_with_variance)
             else:
                 thresh = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
