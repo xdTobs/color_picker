@@ -5,62 +5,56 @@ from tkinter import filedialog
 from PIL import Image, ImageTk
 import cv2
 import numpy as np
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Any
+
 
 class ColorPicker:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title('Image RGB Extractor')
+        self.root.title('Image BGR Extractor')
 
-        self.canvas = tk.Canvas(self.root, width=1000, height=400)
-        self.canvas.pack()
+        self.video_frame = tk.Label(self.root)
+        self.video_frame.grid(row=0, column=0, padx=10, pady=10)
+        self.video_frame.bind("<Button-1>", self.get_bgr_from_video)
+
+        self.threshold_frame = tk.Label(self.root)
+        self.threshold_frame.grid(row=0, column=1, padx=10, pady=10)
 
         self.value_label = tk.Label(self.root, text='')
-        self.value_label.pack()
-
+        self.value_label.grid(row=1, column=0)
         self.instruction_label = tk.Label(self.root, text='Click on 5 points for white')
-        self.instruction_label.pack()
+        self.instruction_label.grid(row=2, column=0, columnspan=2)
 
-        self.btn_load = tk.Button(self.root, text="Take Image", command=self.take_image)
-        self.btn_load.pack()
+        self.btn_take_image = tk.Button(self.root, text="Take Image", command=self.take_image)
+        self.btn_take_image.grid(row=3, column=0)
 
-        self.btn_load = tk.Button(self.root, text="Load Image", command=self.load_image)
-        self.btn_load.pack()
+        self.btn_load_image = tk.Button(self.root, text="Load Image", command=self.load_image)
+        self.btn_load_image.grid(row=4, column=0)
 
-        self.btn_load = tk.Button(self.root, text="Next Category", command=self.next_category)
-        self.btn_load.pack()
+        self.btn_next_category = tk.Button(self.root, text="Next Category", command=self.next_category)
+        self.btn_next_category.grid(row=5, column=0)
 
-        self.btn_load = tk.Button(self.root, text="Done", command=self.save_bounds_to_file)
-        self.btn_load.pack()
+        self.btn_done = tk.Button(self.root, text="Done", command=self.save_bounds_to_file)
+        self.btn_done.grid(row=6, column=0)
 
         self.btn_undo = tk.Button(self.root, text="Undo Last Click", command=self.undo_click)
-        self.btn_undo.pack()
+        self.btn_undo.grid(row=7, column=0)
 
         self.btn_live_video = tk.Button(self.root, text="Live Video", command=self.start_live_video)
-        self.btn_live_video.pack()
+        self.btn_live_video.grid(row=8, column=0)
+
+        self.slider = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, label="Fluctuation")
+        self.slider.set(20)
+        self.slider.grid(row=3, column=1)
 
         self.states: List[str] = ["white", "orange", "border", "green", "red"]
         self.stateIndex: int = 0
         self.click_counts: Dict[str, int] = {state: 0 for state in self.states}
         self.variances: Dict[str, int] = {state: 20 for state in self.states}
 
-        self.canvas.bind("<Button-1>", self.get_rgb_from_image)
-
-        self.rgb_values: Dict[str, List[Tuple[int, int, int]]] = {state: [] for state in self.states}
+        self.bgr_values: Dict[str, List[Tuple[int, int, int]]] = {state: [] for state in self.states}
 
         self.img = None
-
-        self.video_frame = tk.Label(self.root)
-        self.video_frame.pack(side=tk.LEFT, padx=10, pady=10)
-        self.video_frame.bind("<Button-1>", self.get_rgb_from_video)
-
-        self.threshold_frame = tk.Label(self.root)
-        self.threshold_frame.pack(side=tk.LEFT, padx=10, pady=10)
-
-        self.slider = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, label="Fluctuation")
-        self.slider.set(20)
-        self.slider.pack()
-
         self.cap = None
         self.frame = None
         self.running = False
@@ -85,7 +79,9 @@ class ColorPicker:
         self.img = Image.open("image.jpg")
         self.img.thumbnail((1024, 1024))
         self.photo = ImageTk.PhotoImage(self.img)
-        self.canvas.create_image(0, 0, anchor='nw', image=self.photo)
+        self.video_frame.configure(image=self.photo)
+        self.video_frame.image = self.photo
+        self.video_frame.bind("<Button-1>", self.get_bgr_from_image)
 
     def load_image(self):
         filepath = filedialog.askopenfilename()
@@ -94,11 +90,13 @@ class ColorPicker:
         self.img = Image.open(filepath)
         self.img.thumbnail((1024, 1024))
         self.photo = ImageTk.PhotoImage(self.img)
-        self.canvas.create_image(0, 0, anchor='nw', image=self.photo)
+        self.video_frame.configure(image=self.photo)
+        self.video_frame.image = self.photo
+        self.video_frame.bind("<Button-1>", self.get_bgr_from_image)
 
     def next_category(self):
         current_state = self.states[self.stateIndex]
-        self.variances[current_state] = self.slider.get()
+        self.variances[current_state] = int(self.slider.get())
 
         self.stateIndex += 1
         if self.stateIndex == len(self.states):
@@ -107,9 +105,8 @@ class ColorPicker:
         self.update_instruction()
         next_state = self.states[self.stateIndex]
         self.slider.set(self.variances[next_state])
-        print(f"State index: {self.stateIndex}")
 
-    def get_rgb_from_image(self, event):
+    def get_bgr_from_image(self, event):
         if self.img is None:
             return
 
@@ -120,9 +117,9 @@ class ColorPicker:
         else:
             r, g, b = color
 
-        self.add_rgb_value(r, g, b)
+        self.add_bgr_value(b, g, r)
 
-    def get_rgb_from_video(self, event):
+    def get_bgr_from_video(self, event):
         if self.frame is None:
             return
 
@@ -133,15 +130,15 @@ class ColorPicker:
         y = int(y * scale_y)
         b, g, r = self.frame[y, x]
 
-        self.add_rgb_value(r, g, b)
+        self.add_bgr_value(b, g, r)
 
-    def add_rgb_value(self, r, g, b):
+    def add_bgr_value(self, b, g, r):
         stateIndex = self.stateIndex
-        self.rgb_values[self.states[stateIndex]].append((r, g, b))
+        self.bgr_values[self.states[stateIndex]].append((b, g, r))
         self.click_counts[self.states[stateIndex]] += 1
 
         color_hex = f'#{r:02x}{g:02x}{b:02x}'
-        self.value_label.config(text=f'RGB: ({r}, {g}, {b}) Hex: {color_hex}', bg=color_hex)
+        self.value_label.config(text=f'BGR: ({b}, {g}, {r}) Hex: {color_hex}', bg=color_hex)
 
         if self.click_counts[self.states[stateIndex]] == 5:
             self.next_category()
@@ -149,19 +146,19 @@ class ColorPicker:
     def undo_click(self):
         stateIndex = self.stateIndex
         if self.click_counts[self.states[self.stateIndex]] > 0:
-            self.rgb_values[self.states[self.stateIndex]].pop()
+            self.bgr_values[self.states[self.stateIndex]].pop()
             self.click_counts[self.states[self.stateIndex]] -= 1
 
-    def get_average_rgb(self, rgb_array: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
-        r_avg = sum([rgb[0] for rgb in rgb_array]) // len(rgb_array)
-        g_avg = sum([rgb[1] for rgb in rgb_array]) // len(rgb_array)
-        b_avg = sum([rgb[2] for rgb in rgb_array]) // len(rgb_array)
-        return (r_avg, g_avg, b_avg)
+    def get_average_bgr(self, bgr_array: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
+        b_avg = sum([bgr[0] for bgr in bgr_array]) // len(bgr_array)
+        g_avg = sum([bgr[1] for bgr in bgr_array]) // len(bgr_array)
+        r_avg = sum([bgr[2] for bgr in bgr_array]) // len(bgr_array)
+        return (b_avg, g_avg, r_avg)
 
-    def rgb_to_hsv(self, rgb_value: Tuple[int, int, int]) -> Tuple[int, int, int]:
-        bgr_value = np.uint8([[list(rgb_value)]])
-        hsv_value = cv2.cvtColor(bgr_value, cv2.COLOR_BGR2HSV)[0][0]
-        return tuple(hsv_value)
+    def bgr_to_hsv(self, bgr_value: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        bgr_array = np.uint8([[list(bgr_value)]])
+        hsv_value = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2HSV)[0][0]
+        return (int(hsv_value[0]), int(hsv_value[1]), int(hsv_value[2]))
 
     def get_bounds_hsv(self, hsv_value: Tuple[int, int, int], percentage: int) -> np.ndarray:
         h, s, v = hsv_value
@@ -170,9 +167,9 @@ class ColorPicker:
         s_min, s_max = s * (1 - fluctuation), s * (1 + fluctuation)
         v_min, v_max = v * (1 - fluctuation), v * (1 + fluctuation)
 
-        h_min, h_max = max(0, min(179, h_min)), max(0, min(179, h_max))
-        s_min, s_max = max(0, min(255, s_min)), max(0, min(255, s_max))
-        v_min, v_max = max(0, min(255, v_min)), max(0, min(255, v_max))
+        h_min, h_max = max(0, min(179, int(h_min))), max(0, min(179, int(h_max)))
+        s_min, s_max = max(0, min(255, int(s_min))), max(0, min(255, int(s_max)))
+        v_min, v_max = max(0, min(255, int(v_min))), max(0, min(255, int(v_max)))
 
         lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
         upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
@@ -181,16 +178,14 @@ class ColorPicker:
 
     def bounds_dict(self) -> Dict[str, np.ndarray]:
         bounds = {}
-        for color, rgb_list in self.rgb_values.items():
-            if len(rgb_list) == 5:
-                average_rgb = self.get_average_rgb(rgb_list)
-                average_hsv = self.rgb_to_hsv(average_rgb)
+        for color, bgr_list in self.bgr_values.items():
+            if len(bgr_list) == 5:
+                average_bgr = self.get_average_bgr(bgr_list)
+                average_hsv = self.bgr_to_hsv(average_bgr)
                 bounds[color] = self.get_bounds_hsv(average_hsv, self.variances[color])
         return bounds
 
     def save_bounds_to_file(self):
-        bounds = self.bounds_dict()
-
         overall_dir = os.path.dirname(os.path.dirname(__file__))
         video_analysis_dir = os.path.join(overall_dir, 'video_analysis')
         file_path = os.path.join(video_analysis_dir, 'bounds.txt')
@@ -199,25 +194,21 @@ class ColorPicker:
 
         try:
             with open(file_path, 'w') as file:
-                for color, bounds_array in bounds.items():
-                    lower, upper = bounds_array
-                    h_lower, s_lower, v_lower = lower
-                    h_upper, s_upper, v_upper = upper
-                    percentage = self.variances[color]
-                    h, s, v = (h_lower + h_upper) // 2, (s_lower + s_upper) // 2, (v_lower + v_upper) // 2
-                    file.write(f"{color};{int(h)},{int(s)},{int(v)},{percentage}\n")
+                for color, bgr_list in self.bgr_values.items():
+                    if len(bgr_list) == 5:
+                        average_bgr = self.get_average_bgr(bgr_list)
+                        average_hsv = self.bgr_to_hsv(average_bgr)
+                        percentage = self.variances[color]
+                        h, s, v = average_hsv
+                        file.write(f"{color};{int(h)},{int(s)},{int(v)},{percentage}\n")
             print(f'Bounds saved to {file_path}')
         except IOError as e:
             print(f'Error writing to file: {e}')
 
     def apply_threshold(self, image: np.ndarray, bounds_dict_entry: np.ndarray) -> np.ndarray:
         lower, upper = bounds_dict_entry
-        print(f"Lower HSV bounds: {lower}, Upper HSV bounds: {upper}")
 
-
-        image_hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-        print(f"HSV Image: {image_hsv}")
-
+        image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         mask = cv2.inRange(image_hsv, lower, upper)
 
@@ -228,8 +219,6 @@ class ColorPicker:
 
     def start_live_video(self):
         if not self.running:
-            self.video_frame.pack()
-            self.threshold_frame.pack()
             self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -243,18 +232,17 @@ class ColorPicker:
                 continue
 
             self.frame = frame
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            if 0 < len(self.rgb_values[self.states[self.stateIndex]]) < 6:
-                average_rgb = self.get_average_rgb(self.rgb_values[self.states[self.stateIndex]])
-                average_hsv = self.rgb_to_hsv(average_rgb)
+            if 0 < len(self.bgr_values[self.states[self.stateIndex]]) < 6:
+                average_bgr = self.get_average_bgr(self.bgr_values[self.states[self.stateIndex]])
+                average_hsv = self.bgr_to_hsv(average_bgr)
                 bounds_with_variance = self.get_bounds_hsv(average_hsv, self.slider.get())
                 thresh = self.apply_threshold(frame, bounds_with_variance)
             else:
                 thresh = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            frame_rgb = cv2.resize(frame_rgb, (500, 500))
-            frame_pil = Image.fromarray(frame_rgb)
+            frame = cv2.resize(frame, (500, 500))
+            frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             frame_tk = ImageTk.PhotoImage(frame_pil)
             self.video_frame.configure(image=frame_tk)
             self.video_frame.image = frame_tk
