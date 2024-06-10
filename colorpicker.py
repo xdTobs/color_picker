@@ -72,7 +72,7 @@ class ColorPicker:
         self.instruction_label.config(text=instructions[self.stateIndex])
 
     def take_image(self):
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         ret, frame = cap.read()
         cv2.imwrite("image.jpg", frame)
         cap.release()
@@ -160,32 +160,18 @@ class ColorPicker:
         hsv_value = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2HSV)[0][0]
         return (int(hsv_value[0]), int(hsv_value[1]), int(hsv_value[2]))
 
-    def get_bounds_hsv(self, hsv_value: Tuple[int, int, int], percentage: int) -> np.ndarray:
-        h, s, v = hsv_value
-        fluctuation = percentage / 100.0
-        h_min, h_max = h * (1 - fluctuation), h * (1 + fluctuation)
-        s_min, s_max = s * (1 - fluctuation), s * (1 + fluctuation)
-        v_min, v_max = v * (1 - fluctuation), v * (1 + fluctuation)
-
-        h_min, h_max = max(0, min(179, int(h_min))), max(0, min(179, int(h_max)))
-        s_min, s_max = max(0, min(255, int(s_min))), max(0, min(255, int(s_max)))
-        v_min, v_max = max(0, min(255, int(v_min))), max(0, min(255, int(v_max)))
-
-        lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
-        upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
-
-        return np.vstack((lower, upper))
-
     def bounds_dict(self) -> Dict[str, np.ndarray]:
         bounds = {}
         for color, bgr_list in self.bgr_values.items():
             if len(bgr_list) == 5:
                 average_bgr = self.get_average_bgr(bgr_list)
                 average_hsv = self.bgr_to_hsv(average_bgr)
-                bounds[color] = self.get_bounds_hsv(average_hsv, self.variances[color])
+                h,s,v = average_hsv
+                bounds[color] = [h,s,v, self.variances[color]]
         return bounds
 
     def save_bounds_to_file(self):
+        
         overall_dir = os.path.dirname(os.path.dirname(__file__))
         video_analysis_dir = os.path.join(overall_dir, 'video_analysis')
         file_path = os.path.join(video_analysis_dir, 'bounds.txt')
@@ -195,19 +181,27 @@ class ColorPicker:
         try:
             with open(file_path, 'w') as file:
                 for color, bgr_list in self.bgr_values.items():
-                    if len(bgr_list) == 5:
-                        average_bgr = self.get_average_bgr(bgr_list)
-                        average_hsv = self.bgr_to_hsv(average_bgr)
-                        percentage = self.variances[color]
-                        h, s, v = average_hsv
-                        file.write(f"{color};{int(h)},{int(s)},{int(v)},{percentage}\n")
-            print(f'Bounds saved to {file_path}')
+                    if len(bgr_list) == 0:
+                        file.write(f"{color};{0},{0},{0},{0}\n")
+                        continue
+                    average_bgr = self.get_average_bgr(bgr_list)
+                    average_hsv = self.bgr_to_hsv(average_bgr)
+                    percentage = self.variances[color]
+                    h, s, v = average_hsv
+                    file.write(f"{color};{int(h)},{int(s)},{int(v)},{percentage}\n")
+                print(f'Bounds saved to {file_path}')
         except IOError as e:
             print(f'Error writing to file: {e}')
 
     def apply_threshold(self, image: np.ndarray, bounds_dict_entry: np.ndarray) -> np.ndarray:
-        lower, upper = bounds_dict_entry
+        
+        h,s,v,variance = bounds_dict_entry
 
+        lower = np.array([h - variance, s - variance, v - variance])
+        upper = np.array([h + variance, s + variance, v + variance])
+        
+        #print(variance)
+        
         image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         mask = cv2.inRange(image_hsv, lower, upper)
@@ -219,7 +213,7 @@ class ColorPicker:
 
     def start_live_video(self):
         if not self.running:
-            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
             self.running = True
@@ -236,7 +230,9 @@ class ColorPicker:
             if 0 < len(self.bgr_values[self.states[self.stateIndex]]) < 6:
                 average_bgr = self.get_average_bgr(self.bgr_values[self.states[self.stateIndex]])
                 average_hsv = self.bgr_to_hsv(average_bgr)
-                bounds_with_variance = self.get_bounds_hsv(average_hsv, self.slider.get())
+                #print(self.variances)
+                #print(self.states[self.stateIndex])
+                bounds_with_variance = np.array([average_hsv[0], average_hsv[1], average_hsv[2], self.slider.get()])
                 thresh = self.apply_threshold(frame, bounds_with_variance)
             else:
                 thresh = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
