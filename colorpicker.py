@@ -58,8 +58,9 @@ class ColorPicker:
         self.cap = None
         self.frame = None
         self.running = False
-
+        self.bind_keys()
         self.setup_window()
+        
 
     def update_instruction(self):
         instructions = [
@@ -72,7 +73,7 @@ class ColorPicker:
         self.instruction_label.config(text=instructions[self.stateIndex])
 
     def take_image(self):
-        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         ret, frame = cap.read()
         cv2.imwrite("image.jpg", frame)
         cap.release()
@@ -94,17 +95,34 @@ class ColorPicker:
         self.video_frame.image = self.photo
         self.video_frame.bind("<Button-1>", self.get_bgr_from_image)
 
-    def next_category(self):
+
+    def bind_keys(self):
+        for i in range(1, 6):
+            self.root.bind(str(i), self.set_state_index)
+    
+    def set_state_index(self, event):
+        key_pressed = int(event.char)
+        if 1 <= key_pressed <= 5:
+            new_index = key_pressed - 1
+            self.change_category(new_index)
+
+    def change_category(self, new_index):
         current_state = self.states[self.stateIndex]
         self.variances[current_state] = int(self.slider.get())
 
-        self.stateIndex += 1
+        self.stateIndex = new_index
         if self.stateIndex == len(self.states):
             self.stateIndex = 0
 
         self.update_instruction()
         next_state = self.states[self.stateIndex]
         self.slider.set(self.variances[next_state])
+
+    def next_category(self):
+        new_index = self.stateIndex + 1
+        if new_index == len(self.states):
+            new_index = 0
+        self.change_category(new_index)
 
     def get_bgr_from_image(self, event):
         if self.img is None:
@@ -213,7 +231,7 @@ class ColorPicker:
 
     def start_live_video(self):
         if not self.running:
-            self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
             self.running = True
