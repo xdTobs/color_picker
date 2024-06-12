@@ -178,24 +178,6 @@ class ColorPicker:
         hsv_value = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2HSV)[0][0]
         return (int(hsv_value[0]), int(hsv_value[1]), int(hsv_value[2]))
 
-    def get_bounds_hsv(self, hsv_value: Tuple[int, int, int], fluctuation: int) -> np.ndarray:
-        h, s, v = hsv_value
-
-        # Calculate bounds
-        h_min, h_max = (h - fluctuation) % 180, (h + fluctuation) % 180
-        s_min, s_max = max(0, s - fluctuation), min(255, s + fluctuation)
-        v_min, v_max = max(0, v - fluctuation), min(255, v + fluctuation)
-
-        # Handle hue wrap-around if needed
-        if h_min > h_max:
-            lower = np.array([[0, s_min, v_min], [h_max, s_max, v_max]], dtype=np.uint8)
-            upper = np.array([[h_min, s_max, v_max], [179, s_min, v_min]], dtype=np.uint8)
-        else:
-            lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
-            upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
-
-        return np.vstack((lower, upper))
-
     def bounds_dict(self) -> Dict[str, np.ndarray]:
         bounds = {}
         for color, bgr_list in self.bgr_values.items():
