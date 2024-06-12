@@ -60,7 +60,7 @@ class ColorPicker:
         self.running = False
         self.bind_keys()
         self.setup_window()
-        
+
 
     def update_instruction(self):
         instructions = [
@@ -99,7 +99,7 @@ class ColorPicker:
     def bind_keys(self):
         for i in range(1, 6):
             self.root.bind(str(i), self.set_state_index)
-    
+
     def set_state_index(self, event):
         key_pressed = int(event.char)
         if 1 <= key_pressed <= 5:
@@ -178,6 +178,24 @@ class ColorPicker:
         hsv_value = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2HSV)[0][0]
         return (int(hsv_value[0]), int(hsv_value[1]), int(hsv_value[2]))
 
+    def get_bounds_hsv(self, hsv_value: Tuple[int, int, int], fluctuation: int) -> np.ndarray:
+        h, s, v = hsv_value
+
+        # Calculate bounds
+        h_min, h_max = (h - fluctuation) % 180, (h + fluctuation) % 180
+        s_min, s_max = max(0, s - fluctuation), min(255, s + fluctuation)
+        v_min, v_max = max(0, v - fluctuation), min(255, v + fluctuation)
+
+        # Handle hue wrap-around if needed
+        if h_min > h_max:
+            lower = np.array([[0, s_min, v_min], [h_max, s_max, v_max]], dtype=np.uint8)
+            upper = np.array([[h_min, s_max, v_max], [179, s_min, v_min]], dtype=np.uint8)
+        else:
+            lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
+            upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
+
+        return np.vstack((lower, upper))
+
     def bounds_dict(self) -> Dict[str, np.ndarray]:
         bounds = {}
         for color, bgr_list in self.bgr_values.items():
@@ -189,7 +207,7 @@ class ColorPicker:
         return bounds
 
     def save_bounds_to_file(self):
-        
+
         overall_dir = os.path.dirname(os.path.dirname(__file__))
         video_analysis_dir = os.path.join(overall_dir, 'video_analysis')
         file_path = os.path.join(video_analysis_dir, 'bounds.txt')
@@ -212,14 +230,14 @@ class ColorPicker:
             print(f'Error writing to file: {e}')
 
     def apply_threshold(self, image: np.ndarray, bounds_dict_entry: np.ndarray) -> np.ndarray:
-        
+
         h,s,v,variance = bounds_dict_entry
 
         lower = np.array([h - variance, s - variance, v - variance])
         upper = np.array([h + variance, s + variance, v + variance])
-        
+
         #print(variance)
-        
+
         image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         mask = cv2.inRange(image_hsv, lower, upper)
