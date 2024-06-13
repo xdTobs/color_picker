@@ -16,8 +16,6 @@ class ColorPicker:
         self.video_frame = tk.Label(self.root)
         self.video_frame.grid(row=0, column=0, padx=10, pady=10)
         self.video_frame.bind("<Button-1>", self.get_bgr_from_video)
-        self.root.bind("<Control-Button-1>", self.set_goal)
-
 
         self.threshold_frame = tk.Label(self.root)
         self.threshold_frame.grid(row=0, column=1, padx=10, pady=10)
@@ -26,29 +24,26 @@ class ColorPicker:
         self.value_label.grid(row=1, column=0)
         self.instruction_label = tk.Label(self.root, text='Click on 5 points for white')
         self.instruction_label.grid(row=2, column=0, columnspan=2)
-        
-        self.text_set_goal = tk.Label(self.root, text="Set Goal control + left click")
-        self.text_set_goal.grid(row=3, column=0)
 
         self.btn_take_image = tk.Button(self.root, text="Take Image", command=self.take_image)
-        self.btn_take_image.grid(row=4, column=0)
+        self.btn_take_image.grid(row=3, column=0)
 
         self.btn_load_image = tk.Button(self.root, text="Load Image", command=self.load_image)
-        self.btn_load_image.grid(row=5, column=0)
+        self.btn_load_image.grid(row=4, column=0)
 
         self.btn_next_category = tk.Button(self.root, text="Next Category", command=self.next_category)
-        self.btn_next_category.grid(row=6, column=0)
+        self.btn_next_category.grid(row=5, column=0)
         
 
         
         self.btn_done = tk.Button(self.root, text="Done", command=self.save_bounds_to_file)
-        self.btn_done.grid(row=7, column=0)
+        self.btn_done.grid(row=6, column=0)
 
         self.btn_undo = tk.Button(self.root, text="Undo Last Click", command=self.undo_click)
-        self.btn_undo.grid(row=8, column=0)
+        self.btn_undo.grid(row=7, column=0)
 
         self.btn_live_video = tk.Button(self.root, text="Live Video", command=self.start_live_video)
-        self.btn_live_video.grid(row=9, column=0)
+        self.btn_live_video.grid(row=8, column=0)
 
         self.slider = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, label="Fluctuation")
         self.slider.set(20)
@@ -66,8 +61,6 @@ class ColorPicker:
         self.frame = None
         self.running = False
         
-        self.goal_x = 0
-        self.goal_y = 0
         self.bind_keys()
         self.setup_window()
 
@@ -83,7 +76,7 @@ class ColorPicker:
         self.instruction_label.config(text=instructions[self.stateIndex])
 
     def take_image(self):
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         ret, frame = cap.read()
         cv2.imwrite("image.jpg", frame)
         cap.release()
@@ -217,9 +210,6 @@ class ColorPicker:
                     percentage = self.variances[color]
                     h, s, v = average_hsv
                     file.write(f"{color};{int(h)},{int(s)},{int(v)},{percentage}\n")
-                 # Write goal coordinates
-                file.write(f"goal;{self.goal_x},{self.goal_y}\n")
-                print(f"Goal coordinates written to file: {self.goal_x},{self.goal_y}")
                 print(f'Bounds saved to {file_path}')
         except IOError as e:
             print(f'Error writing to file: {e}')
@@ -241,19 +231,11 @@ class ColorPicker:
         mask = cv2.dilate(mask, kernel, iterations=2)
         mask = cv2.erode(mask, kernel, iterations=2)
         return mask
-    
-    # Create a methood to set the goal coordinates
-    def set_goal(self,event):
-        self.goal_x = event.x
-        self.goal_y = event.y
-        self.text_set_goal.config(text=f"Goal set at {self.goal_x},{self.goal_y}")
-        print(f"Goal set at {self.goal_x},{self.goal_y}")
-        
         
         
     def start_live_video(self):
         if not self.running:
-            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
             self.running = True
